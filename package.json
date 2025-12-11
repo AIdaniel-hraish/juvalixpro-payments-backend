@@ -1,14 +1,13 @@
 {
-  "name": "juvalixpro-payments",
+  "name": "juvalixpro-payments-backend",
   "version": "1.0.0",
+  "description": "Backend for JuvalixPro PayPal payments",
   "main": "index.js",
-  "license": "MIT",
+  "type": "module",
   "scripts": {
-    "start": "node api/create-order.js"
+    "start": "node index.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "paypal-rest-sdk": "^1.8.1"
+    "node-fetch": "^3.3.2"
   }
 }
