@@ -6,19 +6,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { amount, currency } = req.body || {};
+    const { orderId } = req.body || {};
 
-    if (!amount || !currency) {
-      return res.status(400).json({
-        error: "Missing amount or currency"
-      });
+    if (!orderId) {
+      return res.status(400).json({ error: "Missing orderId" });
     }
 
     const CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
     const CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
 
     if (!CLIENT_ID || !CLIENT_SECRET) {
-      return res.status(500).json({ error: "Missing PayPal credentials" });
+      return res.status(500).json({
+        error: "Missing PayPal credentials"
+      });
     }
 
     // LIVE URL
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
 
     const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64");
 
-    // 1) Get Access Token (LIVE)
+    // 1) Get access token (LIVE)
     const tokenResponse = await fetch(`${baseUrl}/v1/oauth2/token`, {
       method: "POST",
       headers: {
@@ -40,66 +40,46 @@ export default async function handler(req, res) {
 
     if (!tokenResponse.ok) {
       return res.status(500).json({
-        error: "Failed to get PayPal token (LIVE)",
+        error: "Failed to get token (LIVE)",
         details: tokenText
       });
     }
 
     const { access_token } = JSON.parse(tokenText);
 
-    // 2) Create Order (LIVE)
-    const orderResponse = await fetch(`${baseUrl}/v2/checkout/orders`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${access_token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        intent: "CAPTURE",
-        purchase_units: [
-          {
-            amount: {
-              currency_code: currency,
-              value: amount
-            }
-          }
-        ],
-        application_context: {
-          return_url: "https://juvalixpro-payments.vercel.app/success.html",
-          cancel_url: "https://juvalixpro-payments.vercel.app/cancel.html",
-          brand_name: "Juvalix Pro"
+    // 2) Capture order (LIVE)
+    const captureResponse = await fetch(
+      `${baseUrl}/v2/checkout/orders/${orderId}/capture`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+          "Content-Type": "application/json"
         }
-      })
-    });
+      }
+    );
 
-    const orderText = await orderResponse.text();
+    const captureText = await captureResponse.text();
 
-    if (!orderResponse.ok) {
+    if (!captureResponse.ok) {
       return res.status(500).json({
-        error: "Failed to create PayPal order (LIVE)",
-        details: orderText
+        error: "Failed to capture order (LIVE)",
+        details: captureText
       });
     }
 
-    const orderData = JSON.parse(orderText);
-    const approve = orderData.links.find((l) => l.rel === "approve");
-
-    if (!approve) {
-      return res.status(500).json({
-        error: "No approval URL found",
-        details: orderData
-      });
-    }
+    const captureData = JSON.parse(captureText);
 
     return res.status(200).json({
-      approvalUrl: approve.href,
-      orderId: orderData.id
+      message: "Payment captured successfully",
+      details: captureData
     });
 
   } catch (err) {
     return res.status(500).json({
-      error: "Server crash in create-order",
+      error: "Server crash in capture-order",
       details: String(err)
     });
   }
 }
+
