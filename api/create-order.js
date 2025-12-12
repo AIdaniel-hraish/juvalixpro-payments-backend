@@ -6,28 +6,29 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { orderId } = req.body || {};
+    const { amount, currency } = req.body || {};
 
-    if (!orderId) {
-      return res.status(400).json({ error: "Missing orderId" });
-    }
-
-    const CLIENT_ID = process.PAYPAL_CLIENT_ID;
-    const CLIENT_SECRET = process.PAYPAL_CLIENT_SECRET;
-
-    if (!CLIENT_ID || !CLIENT_SECRET) {
-      return res.status(500).json({
-        error: "Missing PayPal credentials"
+    if (!amount || !currency) {
+      return res.status(400).json({
+        error: "Missing amount or currency"
       });
     }
 
-    // LIVE URL
+    const CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+    const CLIENT_SECRET = process.env.PAYPAL_SECRET;
+
+    if (!CLIENT_ID || !CLIENT_SECRET) {
+      return res.status(500).json({
+        error: "Missing PayPal credentials (env missing)"
+      });
+    }
+
     const baseUrl = "https://api-m.paypal.com";
 
+    // 1) Get Access Token
     const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64");
 
-    // 1) Get access token (LIVE)
-    const tokenResponse = await fetch(`${baseUrl}/v1/oauth2/token`, {
+    const tokenRes = await fetch(`${baseUrl}/v1/oauth2/token`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${auth}`,
@@ -36,51 +37,57 @@ export default async function handler(req, res) {
       body: "grant_type=client_credentials"
     });
 
-    const tokenText = await tokenResponse.text();
+    const tokenData = await tokenRes.json();
 
-    if (!tokenResponse.ok) {
+    if (!tokenRes.ok) {
       return res.status(500).json({
-        error: "Failed to get token (LIVE)",
-        details: tokenText
+        error: "Failed to get PayPal token",
+        details: tokenData
       });
     }
 
-    const { access_token } = JSON.parse(tokenText);
+    const access_token = tokenData.access_token;
 
-    // 2) Capture order (LIVE)
-    const captureResponse = await fetch(
-      `${baseUrl}/v2/checkout/orders/${orderId}/capture`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${access_token}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
+    // 2) Create Order
+    const orderRes = await fetch(`${baseUrl}/v2/checkout/orders`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        intent: "CAPTURE",
+        purchase_units: [
+          {
+            amount: {
+              currency_code: currency,
+              value: amount
+            }
+          }
+        ]
+      })
+    });
 
-    const captureText = await captureResponse.text();
+    const orderData = await orderRes.json();
 
-    if (!captureResponse.ok) {
+    if (!orderRes.ok) {
       return res.status(500).json({
-        error: "Failed to capture order (LIVE)",
-        details: captureText
+        error: "Failed to create order",
+        details: orderData
       });
     }
 
-    const captureData = JSON.parse(captureText);
+    const approveLink = orderData.links.find((l) => l.rel === "approve");
 
     return res.status(200).json({
-      message: "Payment captured successfully",
-      details: captureData
+      orderId: orderData.id,
+      approvalUrl: approveLink.href
     });
 
   } catch (err) {
     return res.status(500).json({
-      error: "Server crash in capture-order",
-      details: String(err)
+      error: "Server crash in create-order",
+      details: err.toString()
     });
   }
 }
-
-
