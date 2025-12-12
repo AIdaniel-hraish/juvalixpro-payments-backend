@@ -12,8 +12,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing orderId" });
     }
 
-    const CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
-    const CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
+    const CLIENT_ID = process.PAYPAL_CLIENT_ID;
+    const CLIENT_SECRET = process.PAYPAL_CLIENT_SECRET;
 
     if (!CLIENT_ID || !CLIENT_SECRET) {
       return res.status(500).json({
@@ -82,4 +82,5 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
