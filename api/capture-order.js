@@ -1,33 +1,32 @@
+import fetch from "node-fetch";
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const { amount, currency } = req.body || {};
+    const { orderId } = req.body || {};
 
-    if (!amount || !currency) {
-      return res.status(400).json({
-        error: "Missing amount or currency"
-      });
+    if (!orderId) {
+      return res.status(400).json({ error: "Missing orderId" });
     }
 
-    const CLIENT_ID = process.PAYPAL_CLIENT_ID;
-    const CLIENT_SECRET = process.PAYPAL_CLIENT_SECRET;
+    const CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+    const CLIENT_SECRET = process.env.PAYPAL_SECRET;
 
     if (!CLIENT_ID || !CLIENT_SECRET) {
-      return res.status(500).json({ 
-        error: "Missing PayPal credentials" 
+      return res.status(500).json({
+        error: "Missing PayPal credentials (env)"
       });
     }
 
-    // LIVE
     const baseUrl = "https://api-m.paypal.com";
 
-    // 1) Get Access Token
     const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64");
 
-    const tokenRes = await fetch(`${baseUrl}/v1/oauth2/token`, {
+    // 1) Get Access Token
+    const tokenResponse = await fetch(`${baseUrl}/v1/oauth2/token`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${auth}`,
@@ -36,69 +35,47 @@ export default async function handler(req, res) {
       body: "grant_type=client_credentials"
     });
 
-    const tokenData = await tokenRes.json();
+    const tokenData = await tokenResponse.json();
 
-    if (!tokenRes.ok) {
+    if (!tokenResponse.ok) {
       return res.status(500).json({
-        error: "Failed to get PayPal token",
+        error: "Failed to get token",
         details: tokenData
       });
     }
 
     const access_token = tokenData.access_token;
 
-    // 2) Create Order
-    const orderRes = await fetch(`${baseUrl}/v2/checkout/orders`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${access_token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        intent: "CAPTURE",
-        purchase_units: [
-          {
-            amount: {
-              currency_code: currency,
-              value: amount
-            }
-          }
-        ],
-        application_context: {
-          brand_name: "Juvalix Pro",
-          return_url: "https://juvalixpro-payments.vercel.app/success.html",
-          cancel_url: "https://juvalixpro-payments.vercel.app/cancel.html",
+    // 2) Capture order
+    const captureResponse = await fetch(
+      `${baseUrl}/v2/checkout/orders/${orderId}/capture`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+          "Content-Type": "application/json"
         }
-      })
-    });
+      }
+    );
 
-    const orderData = await orderRes.json();
+    const captureData = await captureResponse.json();
 
-    if (!orderRes.ok) {
+    if (!captureResponse.ok) {
       return res.status(500).json({
-        error: "Failed to create order",
-        details: orderData
-      });
-    }
-
-    const approveLink = orderData.links.find((l) => l.rel === "approve");
-
-    if (!approveLink) {
-      return res.status(500).json({ 
-        error: "No approval URL found" 
+        error: "Failed to capture order",
+        details: captureData
       });
     }
 
     return res.status(200).json({
-      orderId: orderData.id,
-      approvalUrl: approveLink.href
+      message: "Payment captured successfully",
+      details: captureData
     });
 
   } catch (err) {
     return res.status(500).json({
-      error: "Server crash in create-order",
-      details: String(err)
+      error: "Server crash",
+      details: err.toString()
     });
   }
 }
-
