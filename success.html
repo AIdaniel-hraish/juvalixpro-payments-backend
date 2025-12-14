@@ -1,6 +1,24 @@
 <!DOCTYPE html>
 <html>
-<body style="background:black; color:white; text-align:center;">
+<head>
+  <meta charset="UTF-8" />
+  <title>Payment Success</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body style="background:black; color:white; text-align:center; font-family:Arial;">
   <h1>Payment Success</h1>
+  <p>Returning to the app...</p>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token"); // PayPal Order ID
+
+    if (!token) {
+      document.querySelector("p").innerText = "Missing token from PayPal.";
+    } else {
+      // Deep link back to app
+      window.location.replace(`juvalix://paypal-success?orderId=${encodeURIComponent(token)}`);
+    }
+  </script>
 </body>
 </html>
